@@ -1,0 +1,10 @@
+{
+  "titulo": "Desafio 90 Dias",
+  "inicio": "2026-11-24",
+  "dias": 90,
+  "participantes": [
+    { "id": "jota",    "nome": "Jota",    "secret": "TOKEN_JOTA" },
+    { "id": "isaias",  "nome": "Isaías",  "secret": "TOKEN_ISAIAS" },
+    { "id": "gabriel", "nome": "Gabriel", "secret": "TOKEN_GABRIEL" }
+  ]
+}

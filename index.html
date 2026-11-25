@@ -205,6 +205,19 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .pf-status{font-size:.7rem;font-weight:700;padding:3px 8px;border-radius:6px}
 
 .demo-bar{background:var(--warn-soft);border:1px solid var(--warn)33;border-radius:var(--radius-sm);padding:10px 14px;text-align:center;font-size:.78rem;color:var(--warn)}
+
+/* modal check-in retroativo */
+.modal-overlay{position:fixed;inset:0;background:#000a;z-index:100;display:flex;align-items:center;justify-content:center;padding:16px}
+.modal-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;width:100%;max-width:360px;position:relative}
+.modal-box h4{font-size:1rem;font-weight:800;margin-bottom:14px}
+.modal-close{position:absolute;top:12px;right:14px;background:none;border:none;color:var(--t3);font-size:1.2rem;cursor:pointer}
+.tipo-sel{display:flex;gap:6px;margin-bottom:12px}
+.tipo-btn{flex:1;padding:10px;border-radius:8px;border:2px solid var(--border);background:var(--surface2);color:var(--t2);font-family:Inter,sans-serif;font-size:.78rem;font-weight:700;cursor:pointer;text-align:center;transition:all .15s}
+.tipo-btn.sel{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.dia.clickable{cursor:pointer;transition:all .15s}
+.dia.clickable:hover{transform:scale(1.2);box-shadow:0 0 8px var(--accent)44}
+.checkin-count{position:absolute;top:1px;right:1px;font-size:.45rem;background:var(--accent);color:#000;border-radius:50%;width:12px;height:12px;display:flex;align-items:center;justify-content:center;font-weight:900}
+.dia{position:relative}
 .checkin-box{background:linear-gradient(135deg,var(--ok-soft),var(--accent-soft));border:1px solid var(--ok)44;border-radius:var(--radius);padding:20px;text-align:center}
 .checkin-box.done{background:var(--ok-soft);border-color:var(--ok)44}
 .btn-checkin{background:linear-gradient(135deg,var(--ok),#059669);color:#000;font-size:1.1rem;padding:16px 32px;border-radius:14px;border:none;font-family:'Inter',sans-serif;font-weight:800;cursor:pointer;box-shadow:0 4px 24px #34d39940;transition:all .2s;width:100%}
@@ -784,18 +797,24 @@ async function sbSalvarParticipante(p){
   if(error) console.error('Erro ao salvar participante',error);
 }
 
-async function sbCheckin(participanteId,link){
+async function sbCheckin(participanteId,link,dia,tipo){
   if(!sb) return{ok:false,msg:'Sem conexão'};
-  const dia=new Date().toLocaleDateString('sv-SE');
-  const{data,error}=await sb.from('checkins').upsert({participante_id:participanteId,dia,link:link||''},{onConflict:'participante_id,dia'});
+  dia=dia||new Date().toLocaleDateString('sv-SE');
+  tipo=tipo||'post';
+  const{error}=await sb.from('checkins').insert({participante_id:participanteId,dia,link:link||'',tipo});
   if(error) return{ok:false,msg:error.message};
   return{ok:true};
 }
 
-async function sbRemoverCheckin(participanteId){
+async function sbRemoverCheckin(checkinId){
   if(!sb) return;
-  const dia=new Date().toLocaleDateString('sv-SE');
-  await sb.from('checkins').delete().eq('participante_id',participanteId).eq('dia',dia);
+  await sb.from('checkins').delete().eq('id',checkinId);
+}
+
+async function sbCheckinsNoDia(participanteId,dia){
+  if(!sb) return [];
+  const{data}=await sb.from('checkins').select('*').eq('participante_id',participanteId).eq('dia',dia);
+  return data||[];
 }
 
 function gerarId(nome){return(nome||'user').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');}
@@ -892,7 +911,7 @@ async function renderDash(){
   if(sbParts.length){
     participantes=sbParts.map(p=>{
       const checks=sbCheckins.filter(c=>c.participante_id===p.id);
-      return{nome:p.nome,id:p.id,username:p.username||'',foto:null,seguidores:0,posts:checks.map(c=>({dia:c.dia,views:0,curtidas:0,comentarios:0,alcance:0,salvos:0,compart:0,hora:'',legenda:c.link||''})),erro:null,cor:p.cor,avatar:p.avatar||{}};
+      return{nome:p.nome,id:p.id,username:p.username||'',foto:null,seguidores:0,posts:checks.map(c=>({id:c.id,dia:c.dia,tipo:c.tipo||'post',views:0,curtidas:0,comentarios:0,alcance:0,salvos:0,compart:0,hora:'',legenda:c.link||'',link:c.link||''})),erro:null,cor:p.cor,avatar:p.avatar||{}};
     });
     atualizado=new Date().toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
   } else {
@@ -914,12 +933,20 @@ async function renderDash(){
   const meParticipante=myP?participantes.find(p=>p.id===myP.id||p.nome===myP.nome):null;
   const jaPostouHoje=meParticipante&&meParticipante.posts.some(p=>p.dia===hojeISO);
   const checkinWrap=document.getElementById('checkin-wrap');
+  const postsHoje=meParticipante?(meParticipante.posts||[]).filter(p=>p.dia===hojeISO):[];
   if(meParticipante){
-    if(jaPostouHoje){
-      checkinWrap.innerHTML=`<div class="checkin-box done"><div style="font-size:2rem;margin-bottom:6px">✅</div><div style="font-weight:800;font-size:1rem;color:var(--ok)">Postei hoje!</div><div style="font-size:.75rem;color:var(--t3);margin-top:4px">Check-in feito — dia ${diaAtual} confirmado</div><button class="btn btn-outline btn-sm" style="margin-top:10px;color:var(--miss);border-color:var(--miss)44" onclick="desfazerCheckin()">Desfazer check-in</button></div>`;
-    } else {
-      checkinWrap.innerHTML=`<div class="checkin-box"><div style="font-size:1.5rem;margin-bottom:6px">📸</div><div style="font-weight:700;font-size:.9rem;margin-bottom:10px">Postou seu vídeo hoje?</div><div style="display:flex;gap:8px"><input type="text" id="inp-link" placeholder="Link do post (opcional)" style="flex:1;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--t1);font-family:Inter,sans-serif;font-size:.85rem;outline:none"><button class="btn-checkin" style="flex:0 0 auto;width:auto;padding:14px 24px" onclick="fazerCheckin()">🔥 Postei!</button></div></div>`;
+    let ch=`<div class="checkin-box${postsHoje.length?' done':''}">`;
+    if(postsHoje.length){
+      ch+=`<div style="font-size:1.3rem;margin-bottom:4px">✅ ${postsHoje.length} post${postsHoje.length>1?'s':''} hoje — dia ${diaAtual}</div>`;
+      postsHoje.forEach(p=>{
+        const icon=p.tipo==='story'?'📱':p.tipo==='reels'?'🎬':'📸';
+        ch+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:.8rem"><span>${icon} ${p.tipo||'post'}</span>${p.link?`<a href="${p.link}" target="_blank" style="color:var(--accent);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${p.link}</a>`:'<span style="color:var(--t3);flex:1">sem link</span>'}<button onclick="removerPost(${p.id})" style="background:none;border:none;color:var(--miss);cursor:pointer;font-size:.7rem">✕</button></div>`;
+      });
     }
+    ch+=`<div style="margin-top:8px"><div style="font-weight:700;font-size:.85rem;margin-bottom:8px">${postsHoje.length?'Adicionar mais um':'Postou hoje?'}</div>`;
+    ch+=`<div class="tipo-sel"><button class="tipo-btn sel" onclick="selTipo(this,'post')">📸 Post</button><button class="tipo-btn" onclick="selTipo(this,'reels')">🎬 Reels</button><button class="tipo-btn" onclick="selTipo(this,'story')">📱 Story</button></div>`;
+    ch+=`<div style="display:flex;gap:8px"><input type="text" id="inp-link" placeholder="Link (opcional)" style="flex:1;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--t1);font-family:Inter,sans-serif;font-size:.85rem;outline:none"><button class="btn-checkin" style="flex:0 0 auto;width:auto;padding:14px 24px" onclick="fazerCheckin()">🔥 Postei!</button></div></div></div>`;
+    checkinWrap.innerHTML=ch;
   } else {
     checkinWrap.innerHTML='';
   }
@@ -960,9 +987,12 @@ async function renderDash(){
 
   // ── CALENDÁRIO ──
   const sem=['D','S','T','Q','Q','S','S'];
+  const myId=myP?myP.id:null;
+  const checkinsPorDia={};
+  sbCheckins.forEach(c=>{const k=c.participante_id+'|'+c.dia;if(!checkinsPorDia[k])checkinsPorDia[k]=[];checkinsPorDia[k].push(c);});
   document.getElementById('panel-calendario').innerHTML=ranking.map(p=>{
     let cells='';const off=inicio.getDay();for(let o=0;o<off;o++)cells+='<div class="dia"></div>';
-    for(let n=0;n<totalDias;n++){const dd=new Date(inicio.getTime()+n*864e5);const ds=dd.toISOString().slice(0,10);const f=dd>hoje;const cl=f?'futuro':p.postSet.has(ds)?'postou':'faltou';cells+=`<div class="dia ${cl}${dd.getTime()===hoje.getTime()?' hoje':''}">${dd.getDate()}</div>`;}
+    for(let n=0;n<totalDias;n++){const dd=new Date(inicio.getTime()+n*864e5);const ds=dd.toISOString().slice(0,10);const f=dd>hoje;const postsNoDia=(checkinsPorDia[p.id+'|'+ds]||[]).length;const cl=f?'futuro':postsNoDia?'postou':'faltou';const isMe=p.id===myId;const click=isMe&&!f?` clickable" onclick="abrirModalDia('${ds}','${p.id}')`:'';cells+=`<div class="dia ${cl}${dd.getTime()===hoje.getTime()?' hoje':''}${click}">${dd.getDate()}${postsNoDia>1?`<span class="checkin-count">${postsNoDia}</span>`:''}</div>`;}
     return`<div class="cal-card"><div class="cal-head"><span class="cal-dot" style="background:${pc(p)}"></span><span class="cal-name">${p.nome}</span><span class="cal-score">${p.diasPostou}/${diaAtual}</span></div><div class="cal-grid">${sem.map(d=>`<div class="cal-h">${d}</div>`).join('')}${cells}</div></div>`;
   }).join('')+`<div class="cal-legend"><span><span class="sq" style="background:var(--ok)"></span> Postou</span><span><span class="sq" style="background:var(--miss-soft);border:1px solid var(--miss)44"></span> Faltou</span><span><span class="sq" style="border:2px solid var(--warn)"></span> Hoje</span></div>`;
 
@@ -1040,7 +1070,7 @@ async function renderDash(){
   // meu calendário
   pf+=`<div class="ss"><h3>📅 Minha agenda</h3><div class="cal-card" style="border-color:${pc(me)}30">`;
   let meCells='';const off2=inicio.getDay();for(let o=0;o<off2;o++)meCells+='<div class="dia"></div>';
-  for(let n=0;n<totalDias;n++){const dd=new Date(inicio.getTime()+n*864e5);const ds=dd.toISOString().slice(0,10);const f=dd>hoje;const cl=f?'futuro':me.postSet.has(ds)?'postou':'faltou';meCells+=`<div class="dia ${cl}${dd.getTime()===hoje.getTime()?' hoje':''}">${dd.getDate()}</div>`;}
+  for(let n=0;n<totalDias;n++){const dd=new Date(inicio.getTime()+n*864e5);const ds=dd.toISOString().slice(0,10);const f=dd>hoje;const postsMe=(checkinsPorDia[me.id+'|'+ds]||[]).length;const cl=f?'futuro':postsMe?'postou':'faltou';const click2=!f?` clickable" onclick="abrirModalDia('${ds}','${me.id}')`:'';meCells+=`<div class="dia ${cl}${dd.getTime()===hoje.getTime()?' hoje':''}${click2}">${dd.getDate()}${postsMe>1?`<span class="checkin-count">${postsMe}</span>`:''}</div>`;}
   pf+=`<div class="cal-grid">${sem.map(d=>`<div class="cal-h">${d}</div>`).join('')}${meCells}</div></div></div>`;
 
   // meus vídeos
@@ -1061,21 +1091,54 @@ async function renderDash(){
   document.getElementById('footer').textContent='Atualizado '+atualizado;
 }
 
-async function fazerCheckin(){
+let _tipoSel='post';
+function selTipo(el,tipo){_tipoSel=tipo;document.querySelectorAll('.tipo-btn').forEach(b=>b.classList.remove('sel'));el.classList.add('sel');}
+
+async function fazerCheckin(dia){
   const myP=ls('perfil');if(!myP)return;
   const link=document.getElementById('inp-link')?.value||'';
   const btn=document.querySelector('.btn-checkin');
   if(btn){btn.disabled=true;btn.textContent='Salvando...';}
-  const res=await sbCheckin(myP.id,link);
-  if(res.ok){renderDash();}
+  const res=await sbCheckin(myP.id,link,dia||null,_tipoSel);
+  if(res.ok){_tipoSel='post';renderDash();}
   else{alert('Erro: '+res.msg);if(btn){btn.disabled=false;btn.textContent='🔥 Postei!';}}
 }
 
-async function desfazerCheckin(){
-  const myP=ls('perfil');if(!myP)return;
-  if(!confirm('Desfazer o check-in de hoje?'))return;
-  await sbRemoverCheckin(myP.id);
+async function removerPost(checkinId){
+  if(!confirm('Remover este check-in?'))return;
+  await sbRemoverCheckin(checkinId);
   renderDash();
+}
+
+async function abrirModalDia(dia,participanteId){
+  const posts=await sbCheckinsNoDia(participanteId,dia);
+  const dd=new Date(dia+'T12:00:00');
+  const meses=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  let h=`<div class="modal-overlay" onclick="if(event.target===this)this.remove()"><div class="modal-box"><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>`;
+  h+=`<h4>📅 ${dd.getDate()} de ${meses[dd.getMonth()]}</h4>`;
+  if(posts.length){
+    h+=`<div style="margin-bottom:14px">`;
+    posts.forEach(p=>{
+      const icon=p.tipo==='story'?'📱':p.tipo==='reels'?'🎬':'📸';
+      h+=`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:.82rem"><span>${icon} ${p.tipo||'post'}</span>${p.link?`<a href="${p.link}" target="_blank" style="color:var(--accent);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${p.link}</a>`:'<span style="color:var(--t3);flex:1">sem link</span>'}<button onclick="removerPost(${p.id});this.closest('.modal-overlay').remove()" style="background:none;border:none;color:var(--miss);cursor:pointer;font-size:.75rem">✕</button></div>`;
+    });
+    h+=`</div>`;
+  } else {
+    h+=`<div style="color:var(--t3);font-size:.82rem;margin-bottom:14px">Nenhum post neste dia</div>`;
+  }
+  h+=`<div style="font-weight:700;font-size:.85rem;margin-bottom:8px">Adicionar check-in</div>`;
+  h+=`<div class="tipo-sel"><button class="tipo-btn sel" onclick="selTipo(this,'post')">📸 Post</button><button class="tipo-btn" onclick="selTipo(this,'reels')">🎬 Reels</button><button class="tipo-btn" onclick="selTipo(this,'story')">📱 Story</button></div>`;
+  h+=`<div style="display:flex;gap:8px"><input type="text" id="inp-link-modal" placeholder="Link (opcional)" style="flex:1;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--t1);font-family:Inter,sans-serif;font-size:.85rem;outline:none"><button class="btn-checkin" style="flex:0 0 auto;width:auto;padding:14px 20px" onclick="fazerCheckinModal('${dia}')">Salvar</button></div>`;
+  h+=`</div></div>`;
+  document.body.insertAdjacentHTML('beforeend',h);
+}
+
+async function fazerCheckinModal(dia){
+  const myP=ls('perfil');if(!myP)return;
+  const link=document.getElementById('inp-link-modal')?.value||'';
+  const res=await sbCheckin(myP.id,link,dia,_tipoSel);
+  if(res.ok){_tipoSel='post';document.querySelector('.modal-overlay')?.remove();renderDash();}
+  else alert('Erro: '+res.msg);
 }
 
 function fmt(n){if(n==null)return'—';if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return ''+n;}

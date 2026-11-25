@@ -797,12 +797,73 @@ async function sbSalvarParticipante(p){
   if(error) console.error('Erro ao salvar participante',error);
 }
 
+async function fetchIgMetrics(url){
+  if(!url||!url.includes('instagram.com')) return null;
+  const proxies=['https://api.allorigins.win/raw?url=','https://api.codetabs.com/v1/proxy?quest='];
+  for(const proxy of proxies){
+    try{
+      const r=await fetch(proxy+encodeURIComponent(url),{signal:AbortSignal.timeout(8000)});
+      if(!r.ok) continue;
+      const html=await r.text();
+      const met={};
+      const og=html.match(/<meta\s+property="og:description"\s+content="([^"]+)"/i);
+      if(og){
+        const desc=og[1];
+        const likes=desc.match(/([\d,.KkMm]+)\s*(?:likes?|curtidas?)/i);
+        const comments=desc.match(/([\d,.KkMm]+)\s*(?:comments?|coment[áa]rios?)/i);
+        const views=desc.match(/([\d,.KkMm]+)\s*(?:views?|visualiza[çc][õo]es?|plays?)/i);
+        if(likes) met.curtidas=parseMetricVal(likes[1]);
+        if(comments) met.comentarios=parseMetricVal(comments[1]);
+        if(views) met.views=parseMetricVal(views[1]);
+      }
+      const jsonMatch=html.match(/"video_view_count"\s*:\s*(\d+)/);
+      if(jsonMatch) met.views=parseInt(jsonMatch[1]);
+      const likeMatch=html.match(/"edge_media_preview_like"\s*:\s*\{\s*"count"\s*:\s*(\d+)/);
+      if(likeMatch) met.curtidas=parseInt(likeMatch[1]);
+      const commentMatch=html.match(/"edge_media_preview_comment"\s*:\s*\{\s*"count"\s*:\s*(\d+)/)||html.match(/"edge_media_to_parent_comment"\s*:\s*\{\s*"count"\s*:\s*(\d+)/);
+      if(commentMatch) met.comentarios=parseInt(commentMatch[1]||commentMatch[2]);
+      if(Object.keys(met).length) return met;
+    }catch(e){console.log('Proxy falhou:',proxy,e);}
+  }
+  return null;
+}
+function parseMetricVal(s){
+  if(!s)return 0;s=s.replace(/,/g,'').trim();
+  const m=s.match(/^([\d.]+)\s*([KkMm]?)$/);
+  if(!m)return parseInt(s)||0;
+  const n=parseFloat(m[1]);
+  if(m[2].toLowerCase()==='k')return Math.round(n*1000);
+  if(m[2].toLowerCase()==='m')return Math.round(n*1000000);
+  return Math.round(n);
+}
+
+async function sbAtualizarMetricas(checkinId,met){
+  if(!sb||!met) return;
+  const upd={};
+  if(met.views) upd.views=met.views;
+  if(met.curtidas) upd.curtidas=met.curtidas;
+  if(met.comentarios) upd.comentarios=met.comentarios;
+  if(met.salvos) upd.salvos=met.salvos;
+  if(met.compart) upd.compart=met.compart;
+  if(Object.keys(upd).length){
+    await sb.from('checkins').update(upd).eq('id',checkinId);
+  }
+}
+
 async function sbCheckin(participanteId,link,dia,tipo){
   if(!sb) return{ok:false,msg:'Sem conexão'};
   dia=dia||new Date().toLocaleDateString('sv-SE');
   tipo=tipo||'post';
-  const{error}=await sb.from('checkins').insert({participante_id:participanteId,dia,link:link||'',tipo});
+  const{data,error}=await sb.from('checkins').insert({participante_id:participanteId,dia,link:link||'',tipo}).select();
   if(error) return{ok:false,msg:error.message};
+  if(link&&data&&data[0]){
+    fetchIgMetrics(link).then(met=>{
+      if(met){
+        sbAtualizarMetricas(data[0].id,met);
+        setTimeout(()=>showDash(),1500);
+      }
+    });
+  }
   return{ok:true};
 }
 
@@ -1056,7 +1117,9 @@ async function renderDash(){
       if(p.compart)metLine.push(`${p.compart}↗️`);
       st+=`<div class="card" style="margin-bottom:6px;padding:10px 14px"><div style="display:flex;align-items:center;gap:8px"><span>${icon}</span><span style="font-weight:700;font-size:.82rem;color:${p.corHex}">${p.nome}</span><span style="font-size:.7rem;color:var(--t3);margin-left:auto">${dFmt}</span></div>`;
       if(metLine.length) st+=`<div style="font-size:.75rem;color:var(--t2);margin-top:4px">${metLine.join(' · ')}</div>`;
-      if(p.link) st+=`<a href="${p.link}" target="_blank" style="font-size:.72rem;color:var(--accent);text-decoration:none;display:block;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.link}</a>`;
+      if(p.link){
+        st+=`<div style="display:flex;align-items:center;gap:6px;margin-top:4px"><a href="${p.link}" target="_blank" style="font-size:.72rem;color:var(--accent);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${p.link}</a><button onclick="refetchMetrics(${p.id},'${p.link.replace(/'/g,"\\'")}')" style="background:var(--accent-soft);border:none;border-radius:6px;padding:4px 8px;font-size:.65rem;color:var(--accent);cursor:pointer;white-space:nowrap" id="btn-ref-${p.id}">🔄 Métricas</button></div>`;
+      }
       st+=`</div>`;
     });
   } else {
@@ -1166,6 +1229,19 @@ async function removerPost(checkinId){
   if(!confirm('Remover este check-in?'))return;
   await sbRemoverCheckin(checkinId);
   renderDash();
+}
+
+async function refetchMetrics(checkinId,link){
+  const btn=document.getElementById('btn-ref-'+checkinId);
+  if(btn){btn.textContent='⏳ Buscando...';btn.disabled=true;}
+  const met=await fetchIgMetrics(link);
+  if(met&&Object.keys(met).length){
+    await sbAtualizarMetricas(checkinId,met);
+    if(btn)btn.textContent='✅ Atualizado!';
+    setTimeout(()=>renderDash(),800);
+  } else {
+    if(btn){btn.textContent='❌ Sem dados';setTimeout(()=>{btn.textContent='🔄 Métricas';btn.disabled=false;},2000);}
+  }
 }
 
 async function abrirModalDia(dia,participanteId){

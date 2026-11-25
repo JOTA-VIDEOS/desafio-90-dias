@@ -798,8 +798,15 @@ async function sbRemoverCheckin(participanteId){
   await sb.from('checkins').delete().eq('participante_id',participanteId).eq('dia',dia);
 }
 
+function gerarId(nome){return(nome||'user').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');}
+
 /* ═══ BOOT ═══ */
-const D=window.DADOS;const perfil=ls('perfil');
+const D=window.DADOS;let perfil=ls('perfil');
+if(perfil&&!perfil.id){
+  perfil.id=gerarId(perfil.nome);
+  ls('perfil',perfil);
+  sbSalvarParticipante({id:perfil.id,nome:perfil.nome,username:perfil.user||'',cor:perfil.color||'',avatar:perfil.avatar||{}});
+}
 if(perfil) showDash();
 else document.getElementById('screen-setup').classList.add('active');
 

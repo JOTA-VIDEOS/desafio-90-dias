@@ -798,58 +798,13 @@ async function sbSalvarParticipante(p){
 }
 
 async function fetchIgMetrics(url){
-  if(!url||!url.includes('instagram.com')) return null;
-  const shortcode=url.match(/\/(p|reel|reels)\/([A-Za-z0-9_-]+)/);
-  if(!shortcode) return null;
-  const code=shortcode[2];
-  const targets=[
-    'https://www.instagram.com/p/'+code+'/',
-    'https://www.instagram.com/reel/'+code+'/',
-    url
-  ];
-  const proxies=[
-    u=>'https://corsproxy.io/?url='+encodeURIComponent(u),
-    u=>'https://api.allorigins.win/raw?url='+encodeURIComponent(u),
-    u=>'https://api.codetabs.com/v1/proxy?quest='+encodeURIComponent(u)
-  ];
-  for(const mkProxy of proxies){
-    for(const target of targets){
-      try{
-        const r=await fetch(mkProxy(target),{signal:AbortSignal.timeout(10000)});
-        if(!r.ok) continue;
-        const html=await r.text();
-        const met=parseIgHtml(html);
-        if(met&&Object.keys(met).length) return met;
-      }catch(e){console.log('Proxy falhou:',target,e.message||e);}
-    }
-  }
+  if(!sb||!url||!url.includes('instagram.com')) return null;
+  try{
+    const{data,error}=await sb.rpc('fetch_ig_metrics',{ig_url:url});
+    if(error){console.log('RPC erro:',error);return null;}
+    if(data&&!data.error&&Object.keys(data).length) return data;
+  }catch(e){console.log('fetch_ig_metrics falhou:',e);}
   return null;
-}
-function parseIgHtml(html){
-  const met={};
-  const og=html.match(/<meta\s+(?:property|name)="og:description"\s+content="([^"]+)"/i);
-  if(og){
-    const desc=og[1];
-    const likes=desc.match(/([\d,.KkMm]+)\s*(?:likes?|curtidas?)/i);
-    const comments=desc.match(/([\d,.KkMm]+)\s*(?:comments?|coment[áa]rios?)/i);
-    const views=desc.match(/([\d,.KkMm]+)\s*(?:views?|visualiza[çc][õo]es?|plays?|reprodu[çc][õo]es?)/i);
-    if(likes) met.curtidas=parseMetricVal(likes[1]);
-    if(comments) met.comentarios=parseMetricVal(comments[1]);
-    if(views) met.views=parseMetricVal(views[1]);
-  }
-  const jsonMatch=html.match(/"video_view_count"\s*:\s*(\d+)/);
-  if(jsonMatch) met.views=parseInt(jsonMatch[1]);
-  const playMatch=html.match(/"video_play_count"\s*:\s*(\d+)/);
-  if(playMatch&&!met.views) met.views=parseInt(playMatch[1]);
-  const likeMatch=html.match(/"edge_media_preview_like"\s*:\s*\{\s*"count"\s*:\s*(\d+)/);
-  if(likeMatch) met.curtidas=parseInt(likeMatch[1]);
-  const commentMatch=html.match(/"edge_media_preview_comment"\s*:\s*\{\s*"count"\s*:\s*(\d+)/)||html.match(/"edge_media_to_parent_comment"\s*:\s*\{\s*"count"\s*:\s*(\d+)/);
-  if(commentMatch) met.comentarios=parseInt(commentMatch[1]||commentMatch[2]);
-  const likeCount=html.match(/"like_count"\s*:\s*(\d+)/);
-  if(likeCount&&!met.curtidas) met.curtidas=parseInt(likeCount[1]);
-  const commentCount=html.match(/"comment_count"\s*:\s*(\d+)/);
-  if(commentCount&&!met.comentarios) met.comentarios=parseInt(commentCount[1]);
-  return Object.keys(met).length?met:null;
 }
 function parseMetricVal(s){
   if(!s)return 0;s=s.replace(/,/g,'').trim();
@@ -1264,39 +1219,7 @@ async function refetchMetrics(checkinId,link){
     if(btn)btn.textContent='✅ Atualizado!';
     setTimeout(()=>renderDash(),800);
   } else {
-    abrirModalMetricas(checkinId);
-    if(btn){btn.textContent='🔄 Métricas';btn.disabled=false;}
-  }
-}
-
-function abrirModalMetricas(checkinId){
-  const ov=document.createElement('div');ov.className='modal-overlay';
-  ov.onclick=e=>{if(e.target===ov)ov.remove();};
-  ov.innerHTML=`<div class="modal-box"><button onclick="this.closest('.modal-overlay').remove()" style="position:absolute;top:10px;right:14px;background:none;border:none;color:var(--t3);cursor:pointer;font-size:1.2rem">✕</button>
-  <h3 style="margin:0 0 4px;font-size:1rem">📊 Atualizar métricas</h3>
-  <p style="font-size:.75rem;color:var(--t3);margin:0 0 12px">Preencha com os dados do Instagram</p>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-  <div><label style="font-size:.7rem;color:var(--t2)">👀 Views</label><input type="number" id="met-views" placeholder="0" style="width:100%;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--t1);font-size:.85rem;outline:none"></div>
-  <div><label style="font-size:.7rem;color:var(--t2)">❤️ Curtidas</label><input type="number" id="met-curtidas" placeholder="0" style="width:100%;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--t1);font-size:.85rem;outline:none"></div>
-  <div><label style="font-size:.7rem;color:var(--t2)">💬 Comentários</label><input type="number" id="met-comentarios" placeholder="0" style="width:100%;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--t1);font-size:.85rem;outline:none"></div>
-  <div><label style="font-size:.7rem;color:var(--t2)">🔖 Salvos</label><input type="number" id="met-salvos" placeholder="0" style="width:100%;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--t1);font-size:.85rem;outline:none"></div>
-  <div><label style="font-size:.7rem;color:var(--t2)">↗️ Compartilh.</label><input type="number" id="met-compart" placeholder="0" style="width:100%;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--t1);font-size:.85rem;outline:none"></div>
-  </div>
-  <button onclick="salvarMetricasManual(${checkinId})" class="btn-checkin" style="margin-top:12px;width:100%">💾 Salvar métricas</button></div>`;
-  document.body.appendChild(ov);
-}
-
-async function salvarMetricasManual(checkinId){
-  const met={};
-  const v=parseInt(document.getElementById('met-views')?.value);if(v)met.views=v;
-  const c=parseInt(document.getElementById('met-curtidas')?.value);if(c)met.curtidas=c;
-  const co=parseInt(document.getElementById('met-comentarios')?.value);if(co)met.comentarios=co;
-  const s=parseInt(document.getElementById('met-salvos')?.value);if(s)met.salvos=s;
-  const sh=parseInt(document.getElementById('met-compart')?.value);if(sh)met.compart=sh;
-  if(Object.keys(met).length){
-    await sbAtualizarMetricas(checkinId,met);
-    document.querySelector('.modal-overlay')?.remove();
-    renderDash();
+    if(btn){btn.textContent='❌ Sem dados';setTimeout(()=>{btn.textContent='🔄 Atualizar';btn.disabled=false;},2000);}
   }
 }
 

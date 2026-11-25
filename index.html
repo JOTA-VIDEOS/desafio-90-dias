@@ -796,33 +796,18 @@ function showDash(){
 function renderDash(){
   const hoje=new Date();hoje.setHours(0,0,0,0);
   let inicio,totalDias=90,participantes=[],atualizado='agora',ehDemo=false;
-  const demoAv=[
-    {skin:0,face:0,hair:0,hairColor:2,eyes:0,eyeColor:0,mouth:0,acc:[0]},
-    {skin:4,face:2,hair:4,hairColor:0,eyes:3,eyeColor:1,mouth:2,acc:[6]},
-    {skin:2,face:1,hair:3,hairColor:4,eyes:6,eyeColor:3,mouth:1,acc:[1,4]}
-  ];
-  const demoCores=['roxo','azul','laranja'];
-
   if(D&&!D.demo&&D.participantes&&D.participantes.length){
     inicio=new Date(D.inicio+'T00:00:00-03:00');totalDias=D.dias;participantes=D.participantes;atualizado=D.atualizado;
   } else {
     ehDemo=true;
-    const seed=(()=>{let s=7;return()=>{s=(s*16807)%2147483647;return s/2147483647;};})();
-    inicio=new Date(hoje);inicio.setDate(inicio.getDate()-23);
-    const names=[{nome:'Jota',id:'jota'},{nome:'Isaías',id:'isaias'},{nome:'Gabriel',id:'gabriel'}];
-    participantes=names.map((p,k)=>{
-      const posts=[],chances=[.97,.85,.75];let d=new Date(inicio);
-      while(d<=hoje){
-        if(seed()<chances[k]&&!(d.getTime()===hoje.getTime()&&k===2)){
-          const v=Math.floor(Math.exp(7.6+k*.2+(seed()-.5)*1.6));
-          posts.push({dia:d.toISOString().slice(0,10),hora:`${9+Math.floor(seed()*14)}:${String(Math.floor(seed()*60)).padStart(2,'0')}`,
-            link:null,legenda:['POV: o vídeo de hoje saiu','Dia de gravar na rua','Isso mudou meu jeito de editar','Ninguém fala disso','Testando formato novo','Esse deu trabalho'][Math.floor(seed()*6)],
-            curtidas:Math.floor(v/12),comentarios:Math.floor(v/150),views:v,alcance:Math.floor(v*.8),salvos:Math.floor(v/90),compart:Math.floor(v/70)});
-        }
-        d=new Date(d.getTime()+864e5);
-      }
-      return{...p,username:p.id+'.videos',foto:null,seguidores:800+Math.floor(seed()*8200),posts,erro:null,cor:demoCores[k],avatar:demoAv[k]};
-    });
+    inicio=new Date('2026-11-24T00:00:00-03:00');
+    const myP=ls('perfil');
+    const defaultAv={skin:0,face:0,hair:8,hairColor:0,eyes:0,eyeColor:0,mouth:2,acc:[]};
+    participantes=[
+      {nome:myP?myP.nome:'Jota',id:'jota',username:myP?myP.user:'',foto:null,seguidores:0,posts:[],erro:null,cor:myP?myP.color:'roxo',avatar:myP?myP.avatar:defaultAv},
+      {nome:'Isaías',id:'isaias',username:'',foto:null,seguidores:0,posts:[],erro:null,cor:'azul',avatar:{skin:4,face:2,hair:8,hairColor:0,eyes:0,eyeColor:1,mouth:2,acc:[]}},
+      {nome:'Gabriel',id:'gabriel',username:'',foto:null,seguidores:0,posts:[],erro:null,cor:'laranja',avatar:{skin:2,face:1,hair:8,hairColor:0,eyes:0,eyeColor:3,mouth:2,acc:[]}}
+    ];
     atualizado=new Date().toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
   }
 
@@ -830,7 +815,7 @@ function renderDash(){
   const diasRest=totalDias-diaAtual;
   document.getElementById('nav-dia').textContent=`Dia ${diaAtual}`;
   const frases=diaAtual<=7?['Começou! Agora é todo dia.','Consistência > perfeição.']:diaAtual<=30?['O hábito tá se formando.','Quem para agora, recomeça do zero.']:diaAtual<=60?['Metade do caminho. Sem recuar.','O difícil já passou. Agora é inércia.']:diaAtual<=85?['Reta final. Cada dia conta.','Falta pouco. Não vacila agora.']:['Quase lá! 🔥','Últimos dias. Lenda.'];
-  if(ehDemo) document.getElementById('demo-bar').innerHTML='<div class="demo-bar">🧪 Dados de demonstração</div>';
+  if(ehDemo) document.getElementById('demo-bar').innerHTML='<div class="demo-bar">⏳ Aguardando conexão com o Instagram — métricas serão atualizadas automaticamente</div>';
   const pct=(diaAtual/totalDias*100).toFixed(1);
   document.getElementById('hero').innerHTML=`<div class="day-num">${diaAtual}</div><div class="day-label">de ${totalDias} dias · ${diasRest} restantes</div><div class="moti">"${frases[diaAtual%frases.length]}"</div><div class="prog-wrap"><div class="prog-track"><div class="prog-fill" style="width:${pct}%"></div></div><div class="prog-labels"><span>Início</span><span>${pct}%</span><span>Dia 90</span></div></div>`;
 
@@ -964,7 +949,7 @@ function renderDash(){
   pf+=`</div></div>`;
 
   document.getElementById('panel-perfil').innerHTML=pf;
-  document.getElementById('footer').textContent=ehDemo?'Dados de demonstração':('Atualizado '+atualizado);
+  document.getElementById('footer').textContent=ehDemo?'Aguardando conexão com Instagram':('Atualizado '+atualizado);
 }
 
 function fmt(n){if(n==null)return'—';if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return ''+n;}

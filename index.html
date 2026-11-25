@@ -12,6 +12,7 @@
 <link rel="apple-touch-icon" href="icon-192.svg">
 <title>Desafio 90 Dias</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;600;700;800;900&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js"></script>
 <script src="dados.js" onerror="window.DADOS=null"></script>
 <style>
 :root{
@@ -204,6 +205,11 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .pf-status{font-size:.7rem;font-weight:700;padding:3px 8px;border-radius:6px}
 
 .demo-bar{background:var(--warn-soft);border:1px solid var(--warn)33;border-radius:var(--radius-sm);padding:10px 14px;text-align:center;font-size:.78rem;color:var(--warn)}
+.checkin-box{background:linear-gradient(135deg,var(--ok-soft),var(--accent-soft));border:1px solid var(--ok)44;border-radius:var(--radius);padding:20px;text-align:center}
+.checkin-box.done{background:var(--ok-soft);border-color:var(--ok)44}
+.btn-checkin{background:linear-gradient(135deg,var(--ok),#059669);color:#000;font-size:1.1rem;padding:16px 32px;border-radius:14px;border:none;font-family:'Inter',sans-serif;font-weight:800;cursor:pointer;box-shadow:0 4px 24px #34d39940;transition:all .2s;width:100%}
+.btn-checkin:hover{transform:translateY(-2px);box-shadow:0 6px 30px #34d39960}
+.btn-checkin:disabled{opacity:.6;cursor:not-allowed;transform:none}
 .footer{text-align:center;color:var(--t3);font-size:.68rem;padding:8px 0}
 .install-banner{background:var(--accent-soft);border:1px solid var(--accent)33;border-radius:var(--radius-sm);padding:12px 14px;display:none;align-items:center;gap:10px;font-size:.8rem}
 .install-banner .msg{flex:1;color:var(--t2)}.install-banner .msg strong{color:var(--t1)}
@@ -295,6 +301,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     <button class="btn btn-sm btn-outline" onclick="this.parentElement.style.display='none'" style="padding:8px;min-width:0">✕</button>
   </div>
   <div id="demo-bar"></div>
+  <div id="checkin-wrap"></div>
   <div class="hero-box" id="hero"></div>
   <div id="streaks-wrap"></div>
   <div class="tab-bar">
@@ -660,7 +667,13 @@ function drawAvatar(a,size){
   return svg;
 }
 
-function getTakenColors(){const D=window.DADOS;if(!D||!D.participantes)return[];return D.participantes.map(p=>p.cor).filter(Boolean);}
+let _takenColors=[];
+async function fetchTakenColors(){
+  if(!sb)return;
+  const{data}=await sb.from('participantes').select('cor');
+  _takenColors=(data||[]).map(p=>p.cor).filter(Boolean);
+}
+function getTakenColors(){return _takenColors;}
 
 function buildColorGrid(){
   const taken=getTakenColors();
@@ -745,13 +758,52 @@ function miniAvHTML(p,sz){
   return`<div class="m-av" style="background:${hex}22;border:2px solid ${hex}">${drawAvatar(p.avatar,sz||34)}</div>`;
 }
 
+/* ═══ SUPABASE ═══ */
+const SB_URL='https://hvvrrzginawubhygdudg.supabase.co';
+const SB_KEY='sb_publishable_04nBljXEMFqN-Cza2S4-yw_uCgHX8-n';
+let sb=null;
+try{sb=supabase.createClient(SB_URL,SB_KEY);}catch(e){console.warn('Supabase SDK não carregou',e);}
+
+async function sbCarregarParticipantes(){
+  if(!sb) return [];
+  const{data,error}=await sb.from('participantes').select('*');
+  if(error){console.error('Erro ao carregar participantes',error);return[];}
+  return data||[];
+}
+
+async function sbCarregarCheckins(){
+  if(!sb) return [];
+  const{data,error}=await sb.from('checkins').select('*');
+  if(error){console.error('Erro ao carregar checkins',error);return[];}
+  return data||[];
+}
+
+async function sbSalvarParticipante(p){
+  if(!sb) return;
+  const{error}=await sb.from('participantes').upsert({id:p.id,nome:p.nome,username:p.username||'',cor:p.cor,avatar:p.avatar},{onConflict:'id'});
+  if(error) console.error('Erro ao salvar participante',error);
+}
+
+async function sbCheckin(participanteId,link){
+  if(!sb) return{ok:false,msg:'Sem conexão'};
+  const dia=new Date().toLocaleDateString('sv-SE');
+  const{data,error}=await sb.from('checkins').upsert({participante_id:participanteId,dia,link:link||''},{onConflict:'participante_id,dia'});
+  if(error) return{ok:false,msg:error.message};
+  return{ok:true};
+}
+
+async function sbRemoverCheckin(participanteId){
+  if(!sb) return;
+  const dia=new Date().toLocaleDateString('sv-SE');
+  await sb.from('checkins').delete().eq('participante_id',participanteId).eq('dia',dia);
+}
+
 /* ═══ BOOT ═══ */
 const D=window.DADOS;const perfil=ls('perfil');
-if(D&&D.participantes&&D.participantes.length&&!D.demo) showDash();
-else if(perfil) showDash();
+if(perfil) showDash();
 else document.getElementById('screen-setup').classList.add('active');
 
-function goToAvatar(){
+async function goToAvatar(){
   const nome=document.getElementById('inp-nome').value.trim();
   const user=document.getElementById('inp-user').value.trim().replace(/^@/,'');
   if(!nome){document.getElementById('inp-nome').focus();return;}
@@ -759,6 +811,7 @@ function goToAvatar(){
   document.getElementById('screen-setup').classList.remove('active');
   document.getElementById('screen-avatar').classList.add('active');
   document.getElementById('av-name').textContent=nome;
+  await fetchTakenColors();
   buildColorGrid();
   buildPickerRow('pick-skin',SKINS.length,'skin',skinPreview);
   buildPickerRow('pick-face',FACES.length,'face',facePreview);
@@ -771,21 +824,26 @@ function goToAvatar(){
   updatePreview();
 }
 
-function salvarPerfil(){
+async function salvarPerfil(){
   if(!av.color){document.getElementById('color-msg').textContent='⚠️ Escolha uma cor!';document.getElementById('color-msg').style.color='var(--miss)';return;}
   const nome=ls('temp_nome'),user=ls('temp_user');
-  ls('perfil',{nome,user,color:av.color,avatar:{skin:av.skin,face:av.face,hair:av.hair,hairColor:av.hairColor,eyes:av.eyes,eyeColor:av.eyeColor,mouth:av.mouth,acc:av.acc}});
+  const avatarData={skin:av.skin,face:av.face,hair:av.hair,hairColor:av.hairColor,eyes:av.eyes,eyeColor:av.eyeColor,mouth:av.mouth,acc:av.acc};
+  const idSlug=(nome||'user').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
+  const perfilObj={nome,user,color:av.color,avatar:avatarData,id:ls('perfil')?.id||idSlug};
+  ls('perfil',perfilObj);
+  await sbSalvarParticipante({id:perfilObj.id,nome,username:user,cor:av.color,avatar:avatarData});
   document.getElementById('screen-avatar').classList.remove('active');
   showDash();
 }
 
-function editarAvatar(){
+async function editarAvatar(){
   const p=ls('perfil');
   if(p&&p.avatar){av.skin=p.avatar.skin;av.face=p.avatar.face;av.hair=p.avatar.hair;av.hairColor=p.avatar.hairColor;av.eyes=p.avatar.eyes;av.eyeColor=p.avatar.eyeColor;av.mouth=p.avatar.mouth;av.acc=p.avatar.acc||[];av.color=p.color;}
   if(p){ls('temp_nome',p.nome);ls('temp_user',p.user);}
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById('screen-avatar').classList.add('active');
   document.getElementById('av-name').textContent=p?p.nome:'';
+  await fetchTakenColors();
   buildColorGrid();
   buildPickerRow('pick-skin',SKINS.length,'skin',skinPreview);
   buildPickerRow('pick-face',FACES.length,'face',facePreview);
@@ -807,26 +865,35 @@ function showDash(){
     document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
     document.getElementById('panel-'+t.dataset.tab).classList.add('active');
   }));
+  // auto-refresh a cada 60s
+  setInterval(()=>renderDash(),60000);
 }
 
 /* ══════════════════════════════════════
    RENDER
    ══════════════════════════════════════ */
-function renderDash(){
+async function renderDash(){
   const hoje=new Date();hoje.setHours(0,0,0,0);
-  let inicio,totalDias=90,participantes=[],atualizado='agora',ehDemo=false;
-  if(D&&!D.demo&&D.participantes&&D.participantes.length){
-    inicio=new Date(D.inicio+'T00:00:00-03:00');totalDias=D.dias;participantes=D.participantes;atualizado=D.atualizado;
+  const inicio=new Date('2026-11-24T00:00:00-03:00');
+  const totalDias=90;
+  let participantes=[];
+  let atualizado='agora';
+
+  const sbParts=await sbCarregarParticipantes();
+  const sbCheckins=await sbCarregarCheckins();
+
+  if(sbParts.length){
+    participantes=sbParts.map(p=>{
+      const checks=sbCheckins.filter(c=>c.participante_id===p.id);
+      return{nome:p.nome,id:p.id,username:p.username||'',foto:null,seguidores:0,posts:checks.map(c=>({dia:c.dia,views:0,curtidas:0,comentarios:0,alcance:0,salvos:0,compart:0,hora:'',legenda:c.link||''})),erro:null,cor:p.cor,avatar:p.avatar||{}};
+    });
+    atualizado=new Date().toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
   } else {
-    ehDemo=true;
-    inicio=new Date('2026-11-24T00:00:00-03:00');
     const myP=ls('perfil');
     const defaultAv={skin:0,face:0,hair:8,hairColor:0,eyes:0,eyeColor:0,mouth:2,acc:[]};
-    participantes=[
-      {nome:myP?myP.nome:'Jota',id:'jota',username:myP?myP.user:'',foto:null,seguidores:0,posts:[],erro:null,cor:myP?myP.color:'roxo',avatar:myP?myP.avatar:defaultAv},
-      {nome:'Isaías',id:'isaias',username:'',foto:null,seguidores:0,posts:[],erro:null,cor:'azul',avatar:{skin:4,face:2,hair:8,hairColor:0,eyes:0,eyeColor:1,mouth:2,acc:[]}},
-      {nome:'Gabriel',id:'gabriel',username:'',foto:null,seguidores:0,posts:[],erro:null,cor:'laranja',avatar:{skin:2,face:1,hair:8,hairColor:0,eyes:0,eyeColor:3,mouth:2,acc:[]}}
-    ];
+    if(myP){
+      participantes=[{nome:myP.nome,id:myP.id||'eu',username:myP.user||'',foto:null,seguidores:0,posts:[],erro:null,cor:myP.color||'roxo',avatar:myP.avatar||defaultAv}];
+    }
     atualizado=new Date().toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
   }
 
@@ -834,7 +901,22 @@ function renderDash(){
   const diasRest=totalDias-diaAtual;
   document.getElementById('nav-dia').textContent=`Dia ${diaAtual}`;
   const frases=diaAtual<=7?['Começou! Agora é todo dia.','Consistência > perfeição.']:diaAtual<=30?['O hábito tá se formando.','Quem para agora, recomeça do zero.']:diaAtual<=60?['Metade do caminho. Sem recuar.','O difícil já passou. Agora é inércia.']:diaAtual<=85?['Reta final. Cada dia conta.','Falta pouco. Não vacila agora.']:['Quase lá! 🔥','Últimos dias. Lenda.'];
-  if(ehDemo) document.getElementById('demo-bar').innerHTML='<div class="demo-bar">⏳ Aguardando conexão com o Instagram — métricas serão atualizadas automaticamente</div>';
+  // check-in button
+  const myP=ls('perfil');
+  const hojeISO=hoje.toISOString().slice(0,10);
+  const meParticipante=myP?participantes.find(p=>p.id===myP.id||p.nome===myP.nome):null;
+  const jaPostouHoje=meParticipante&&meParticipante.posts.some(p=>p.dia===hojeISO);
+  const checkinWrap=document.getElementById('checkin-wrap');
+  if(meParticipante){
+    if(jaPostouHoje){
+      checkinWrap.innerHTML=`<div class="checkin-box done"><div style="font-size:2rem;margin-bottom:6px">✅</div><div style="font-weight:800;font-size:1rem;color:var(--ok)">Postei hoje!</div><div style="font-size:.75rem;color:var(--t3);margin-top:4px">Check-in feito — dia ${diaAtual} confirmado</div><button class="btn btn-outline btn-sm" style="margin-top:10px;color:var(--miss);border-color:var(--miss)44" onclick="desfazerCheckin()">Desfazer check-in</button></div>`;
+    } else {
+      checkinWrap.innerHTML=`<div class="checkin-box"><div style="font-size:1.5rem;margin-bottom:6px">📸</div><div style="font-weight:700;font-size:.9rem;margin-bottom:10px">Postou seu vídeo hoje?</div><div style="display:flex;gap:8px"><input type="text" id="inp-link" placeholder="Link do post (opcional)" style="flex:1;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--t1);font-family:Inter,sans-serif;font-size:.85rem;outline:none"><button class="btn-checkin" style="flex:0 0 auto;width:auto;padding:14px 24px" onclick="fazerCheckin()">🔥 Postei!</button></div></div>`;
+    }
+  } else {
+    checkinWrap.innerHTML='';
+  }
+  document.getElementById('demo-bar').innerHTML=participantes.length?'':'<div class="demo-bar">⏳ Nenhum participante cadastrado ainda</div>';
   const pct=(diaAtual/totalDias*100).toFixed(1);
   document.getElementById('hero').innerHTML=`<div class="day-num">${diaAtual}</div><div class="day-label">de ${totalDias} dias · ${diasRest} restantes</div><div class="moti">"${frases[diaAtual%frases.length]}"</div><div class="prog-wrap"><div class="prog-track"><div class="prog-fill" style="width:${pct}%"></div></div><div class="prog-labels"><span>Início</span><span>${pct}%</span><span>Dia 90</span></div></div>`;
 
@@ -920,7 +1002,7 @@ function renderDash(){
   const meN=Math.max(me.diasPostou,1);
   const mePct=(me.diasPostou/diaAtual*100).toFixed(0);
   const mePos=ranking.indexOf(me)+1;
-  const mePosts=(me.posts||[]).slice().sort((a,b)=>b.dia.localeCompare(a.dia)||b.hora.localeCompare(a.hora));
+  const mePosts=(me.posts||[]).slice().sort((a,b)=>b.dia.localeCompare(a.dia)||(b.hora||'').localeCompare(a.hora||''));
   const meses=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
   let pf=`<div class="profile-header" style="border-color:${pc(me)}30">
@@ -969,7 +1051,24 @@ function renderDash(){
   pf+=`</div></div>`;
 
   document.getElementById('panel-perfil').innerHTML=pf;
-  document.getElementById('footer').textContent=ehDemo?'Aguardando conexão com Instagram':('Atualizado '+atualizado);
+  document.getElementById('footer').textContent='Atualizado '+atualizado;
+}
+
+async function fazerCheckin(){
+  const myP=ls('perfil');if(!myP)return;
+  const link=document.getElementById('inp-link')?.value||'';
+  const btn=document.querySelector('.btn-checkin');
+  if(btn){btn.disabled=true;btn.textContent='Salvando...';}
+  const res=await sbCheckin(myP.id,link);
+  if(res.ok){renderDash();}
+  else{alert('Erro: '+res.msg);if(btn){btn.disabled=false;btn.textContent='🔥 Postei!';}}
+}
+
+async function desfazerCheckin(){
+  const myP=ls('perfil');if(!myP)return;
+  if(!confirm('Desfazer o check-in de hoje?'))return;
+  await sbRemoverCheckin(myP.id);
+  renderDash();
 }
 
 function fmt(n){if(n==null)return'—';if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return ''+n;}

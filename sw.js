@@ -1,4 +1,4 @@
-const CACHE = 'desafio90-v1';
+const CACHE = 'desafio90-v3';
 const ASSETS = ['./', 'index.html', 'manifest.json', 'icon-192.svg', 'icon-512.svg'];
 
 self.addEventListener('install', e => {
@@ -12,10 +12,10 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // Network first for data, cache first for shell
-  if (e.request.url.includes('dados.js')) {
-    e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
-  } else {
-    e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
-  }
+  e.respondWith(
+    fetch(e.request).then(r => {
+      if(r.ok){const c=r.clone();caches.open(CACHE).then(cache=>cache.put(e.request,c));}
+      return r;
+    }).catch(() => caches.match(e.request))
+  );
 });

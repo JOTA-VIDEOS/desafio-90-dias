@@ -779,6 +779,25 @@ function salvarPerfil(){
   showDash();
 }
 
+function editarAvatar(){
+  const p=ls('perfil');
+  if(p&&p.avatar){av.skin=p.avatar.skin;av.face=p.avatar.face;av.hair=p.avatar.hair;av.hairColor=p.avatar.hairColor;av.eyes=p.avatar.eyes;av.eyeColor=p.avatar.eyeColor;av.mouth=p.avatar.mouth;av.acc=p.avatar.acc||[];av.color=p.color;}
+  if(p){ls('temp_nome',p.nome);ls('temp_user',p.user);}
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-avatar').classList.add('active');
+  document.getElementById('av-name').textContent=p?p.nome:'';
+  buildColorGrid();
+  buildPickerRow('pick-skin',SKINS.length,'skin',skinPreview);
+  buildPickerRow('pick-face',FACES.length,'face',facePreview);
+  buildPickerRow('pick-hair',HAIR_NAMES.length,'hair',hairPreview);
+  buildPickerRow('pick-hairColor',HAIR_COLORS.length,'hairColor',hairColorPreview);
+  buildPickerRow('pick-eyes',EYE_NAMES.length,'eyes',eyePreview);
+  buildPickerRow('pick-eyeColor',EYE_COLORS.length,'eyeColor',eyeColorPreview);
+  buildPickerRow('pick-mouth',MOUTH_NAMES.length,'mouth',mouthPreview);
+  buildAccPicker();
+  updatePreview();
+}
+
 function showDash(){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById('screen-dash').classList.add('active');
@@ -908,6 +927,7 @@ function renderDash(){
     <div class="ph-av" style="background:${pc(me)}22;border:3px solid ${pc(me)}">${drawAvatar(me.avatar||{},80)}</div>
     <div class="ph-name">${me.nome}</div>
     <div class="ph-user">${me.username?'@'+me.username:''} · ${mePos}º no ranking</div>
+    <div style="margin:10px 0"><button class="btn btn-outline btn-sm" onclick="editarAvatar()">✏️ Editar personagem</button></div>
     <div class="ph-row">
       <div class="ph-stat"><div class="ph-sv">${me.diasPostou}<span style="font-size:.5em;color:var(--t3)">/${diaAtual}</span></div><div class="ph-sl">Dias</div></div>
       <div class="ph-stat"><div class="ph-sv">${me.seqAtual}🔥</div><div class="ph-sl">Sequência</div></div>

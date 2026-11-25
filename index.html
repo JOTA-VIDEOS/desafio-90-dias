@@ -1264,7 +1264,39 @@ async function refetchMetrics(checkinId,link){
     if(btn)btn.textContent='✅ Atualizado!';
     setTimeout(()=>renderDash(),800);
   } else {
-    if(btn){btn.textContent='❌ Sem dados';setTimeout(()=>{btn.textContent='🔄 Métricas';btn.disabled=false;},2000);}
+    abrirModalMetricas(checkinId);
+    if(btn){btn.textContent='🔄 Métricas';btn.disabled=false;}
+  }
+}
+
+function abrirModalMetricas(checkinId){
+  const ov=document.createElement('div');ov.className='modal-overlay';
+  ov.onclick=e=>{if(e.target===ov)ov.remove();};
+  ov.innerHTML=`<div class="modal-box"><button onclick="this.closest('.modal-overlay').remove()" style="position:absolute;top:10px;right:14px;background:none;border:none;color:var(--t3);cursor:pointer;font-size:1.2rem">✕</button>
+  <h3 style="margin:0 0 4px;font-size:1rem">📊 Atualizar métricas</h3>
+  <p style="font-size:.75rem;color:var(--t3);margin:0 0 12px">Preencha com os dados do Instagram</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+  <div><label style="font-size:.7rem;color:var(--t2)">👀 Views</label><input type="number" id="met-views" placeholder="0" style="width:100%;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--t1);font-size:.85rem;outline:none"></div>
+  <div><label style="font-size:.7rem;color:var(--t2)">❤️ Curtidas</label><input type="number" id="met-curtidas" placeholder="0" style="width:100%;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--t1);font-size:.85rem;outline:none"></div>
+  <div><label style="font-size:.7rem;color:var(--t2)">💬 Comentários</label><input type="number" id="met-comentarios" placeholder="0" style="width:100%;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--t1);font-size:.85rem;outline:none"></div>
+  <div><label style="font-size:.7rem;color:var(--t2)">🔖 Salvos</label><input type="number" id="met-salvos" placeholder="0" style="width:100%;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--t1);font-size:.85rem;outline:none"></div>
+  <div><label style="font-size:.7rem;color:var(--t2)">↗️ Compartilh.</label><input type="number" id="met-compart" placeholder="0" style="width:100%;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--t1);font-size:.85rem;outline:none"></div>
+  </div>
+  <button onclick="salvarMetricasManual(${checkinId})" class="btn-checkin" style="margin-top:12px;width:100%">💾 Salvar métricas</button></div>`;
+  document.body.appendChild(ov);
+}
+
+async function salvarMetricasManual(checkinId){
+  const met={};
+  const v=parseInt(document.getElementById('met-views')?.value);if(v)met.views=v;
+  const c=parseInt(document.getElementById('met-curtidas')?.value);if(c)met.curtidas=c;
+  const co=parseInt(document.getElementById('met-comentarios')?.value);if(co)met.comentarios=co;
+  const s=parseInt(document.getElementById('met-salvos')?.value);if(s)met.salvos=s;
+  const sh=parseInt(document.getElementById('met-compart')?.value);if(sh)met.compart=sh;
+  if(Object.keys(met).length){
+    await sbAtualizarMetricas(checkinId,met);
+    document.querySelector('.modal-overlay')?.remove();
+    renderDash();
   }
 }
 

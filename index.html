@@ -954,7 +954,7 @@ async function renderDash(){
   if(sbParts.length){
     participantes=sbParts.map(p=>{
       const checks=sbCheckins.filter(c=>c.participante_id===p.id);
-      return{nome:p.nome,id:p.id,username:p.username||'',foto:null,seguidores:0,posts:checks.map(c=>({id:c.id,dia:c.dia,tipo:c.tipo||'post',views:0,curtidas:0,comentarios:0,alcance:0,salvos:0,compart:0,hora:'',legenda:c.link||'',link:c.link||''})),erro:null,cor:p.cor,avatar:p.avatar||{}};
+      return{nome:p.nome,id:p.id,username:p.username||'',foto:null,seguidores:0,posts:checks.map(c=>({id:c.id,dia:c.dia,tipo:c.tipo||'post',views:c.views||0,curtidas:c.curtidas||0,comentarios:c.comentarios||0,alcance:0,salvos:c.salvos||0,compart:c.compart||0,hora:'',legenda:c.link||'',link:c.link||''})),erro:null,cor:p.cor,avatar:p.avatar||{}};
     });
     atualizado=new Date().toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
   } else {

@@ -1056,7 +1056,7 @@ async function renderDash(){
   const hasMetrics=totalV>0||totalC>0;
 
   // Resumo de hoje
-  st+=`<div class="ss"><h3>📋 Resumo de hoje</h3><div class="metric-row"><div class="mc${qP.length===ranking.length?' hl':''}"><div class="mc-i">${qP.length===ranking.length?'🎉':'📹'}</div><div class="mc-v">${qP.length}/${ranking.length}</div><div class="mc-l">Postaram hoje</div></div><div class="mc"><div class="mc-i">📊</div><div class="mc-v">${totalPostsAll}</div><div class="mc-l">Posts totais</div></div><div class="mc"><div class="mc-i">📅</div><div class="mc-v">${diaAtual}</div><div class="mc-l">Dia do desafio</div></div></div>`;
+  st+=`<div class="ss"><h3>📋 Resumo de hoje <button onclick="atualizarTodasMetricas()" id="btn-refresh-all" style="float:right;background:var(--accent-soft);border:none;border-radius:6px;padding:6px 12px;font-size:.7rem;color:var(--accent);cursor:pointer;font-weight:700">🔄 Atualizar tudo</button></h3><div class="metric-row"><div class="mc${qP.length===ranking.length?' hl':''}"><div class="mc-i">${qP.length===ranking.length?'🎉':'📹'}</div><div class="mc-v">${qP.length}/${ranking.length}</div><div class="mc-l">Postaram hoje</div></div><div class="mc"><div class="mc-i">📊</div><div class="mc-v">${totalPostsAll}</div><div class="mc-l">Posts totais</div></div><div class="mc"><div class="mc-i">📅</div><div class="mc-v">${diaAtual}</div><div class="mc-l">Dia do desafio</div></div></div>`;
   if(qF.length) st+=`<div style="background:var(--miss-soft);border:1px solid var(--miss)33;border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:8px"><span style="font-size:1.1rem">⚠️</span><span style="font-size:.82rem;color:var(--miss)">Falta postar: <strong>${qF.map(p=>p.nome).join(', ')}</strong></span></div>`;
   st+=`</div>`;
 
@@ -1221,6 +1221,26 @@ async function refetchMetrics(checkinId,link){
   } else {
     if(btn){btn.textContent='❌ Sem dados';setTimeout(()=>{btn.textContent='🔄 Atualizar';btn.disabled=false;},2000);}
   }
+}
+
+async function atualizarTodasMetricas(){
+  const btn=document.getElementById('btn-refresh-all');
+  if(!sb) return;
+  const{data:checkins}=await sb.from('checkins').select('id,link').not('link','is',null).neq('link','');
+  if(!checkins||!checkins.length) return;
+  let ok=0,total=checkins.length;
+  for(const c of checkins){
+    if(btn) btn.textContent=`⏳ ${ok}/${total}`;
+    try{
+      const met=await fetchIgMetrics(c.link);
+      if(met&&Object.keys(met).length){
+        await sbAtualizarMetricas(c.id,met);
+        ok++;
+      }
+    }catch(e){console.log('erro id',c.id,e);}
+  }
+  if(btn) btn.textContent=`✅ ${ok}/${total} atualizados`;
+  setTimeout(()=>renderDash(),1500);
 }
 
 async function abrirModalDia(dia,participanteId){

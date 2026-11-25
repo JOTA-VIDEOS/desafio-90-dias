@@ -824,10 +824,13 @@ const D=window.DADOS;let perfil=ls('perfil');
 if(perfil&&!perfil.id){
   perfil.id=gerarId(perfil.nome);
   ls('perfil',perfil);
-  sbSalvarParticipante({id:perfil.id,nome:perfil.nome,username:perfil.user||'',cor:perfil.color||'',avatar:perfil.avatar||{}});
 }
-if(perfil) showDash();
-else document.getElementById('screen-setup').classList.add('active');
+if(perfil){
+  sbSalvarParticipante({id:perfil.id,nome:perfil.nome,username:perfil.user||'',cor:perfil.color||'',avatar:perfil.avatar||{}});
+  showDash();
+} else {
+  document.getElementById('screen-setup').classList.add('active');
+}
 
 async function goToAvatar(){
   const nome=document.getElementById('inp-nome').value.trim();

@@ -1001,18 +1001,73 @@ async function renderDash(){
 
   // ── STATS ──
   const hojeStr=hoje.toISOString().slice(0,10);
+  const ontemStr=new Date(hoje.getTime()-864e5).toISOString().slice(0,10);
   const pH=ranking.map(p=>({nome:p.nome,corHex:p.corHex,posts:(p.posts||[]).filter(x=>x.dia===hojeStr)}));
-  const aH=pH.flatMap(p=>p.posts.map(v=>({...v,nome:p.nome,corHex:p.corHex})));
-  const maxV=Math.max(...ranking.map(p=>p.totalViews),1);
+  const pOntem=ranking.map(p=>({nome:p.nome,corHex:p.corHex,posts:(p.posts||[]).filter(x=>x.dia===ontemStr)}));
   let st='';
   const qP=pH.filter(p=>p.posts.length),qF=pH.filter(p=>!p.posts.length);
-  st+=`<div class="ss"><h3>📋 Resumo de hoje</h3><div class="metric-row"><div class="mc${qP.length===ranking.length?' hl':''}"><div class="mc-i">${qP.length===ranking.length?'🎉':'📹'}</div><div class="mc-v">${qP.length}/${ranking.length}</div><div class="mc-l">Postaram hoje</div></div><div class="mc"><div class="mc-i">👀</div><div class="mc-v">${fmt(aH.reduce((s,x)=>s+(x.views||0),0))}</div><div class="mc-l">Views hoje</div></div><div class="mc"><div class="mc-i">❤️</div><div class="mc-v">${fmt(aH.reduce((s,x)=>s+(x.curtidas||0),0))}</div><div class="mc-l">Curtidas hoje</div></div></div>`;
+  const totalPostsAll=ranking.reduce((s,p)=>s+(p.posts||[]).length,0);
+  const totalReels=ranking.reduce((s,p)=>s+(p.posts||[]).filter(x=>x.tipo==='reels').length,0);
+  const totalStories=ranking.reduce((s,p)=>s+(p.posts||[]).filter(x=>x.tipo==='story').length,0);
+  const totalPosts=totalPostsAll-totalReels-totalStories;
+  const totalV=ranking.reduce((s,p)=>s+p.totalViews,0);
+  const totalC=ranking.reduce((s,p)=>s+p.totalCurtidas,0);
+  const totalCo=ranking.reduce((s,p)=>s+p.totalComentarios,0);
+  const hasMetrics=totalV>0||totalC>0;
+
+  // Resumo de hoje
+  st+=`<div class="ss"><h3>📋 Resumo de hoje</h3><div class="metric-row"><div class="mc${qP.length===ranking.length?' hl':''}"><div class="mc-i">${qP.length===ranking.length?'🎉':'📹'}</div><div class="mc-v">${qP.length}/${ranking.length}</div><div class="mc-l">Postaram hoje</div></div><div class="mc"><div class="mc-i">📊</div><div class="mc-v">${totalPostsAll}</div><div class="mc-l">Posts totais</div></div><div class="mc"><div class="mc-i">📅</div><div class="mc-v">${diaAtual}</div><div class="mc-l">Dia do desafio</div></div></div>`;
   if(qF.length) st+=`<div style="background:var(--miss-soft);border:1px solid var(--miss)33;border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:8px"><span style="font-size:1.1rem">⚠️</span><span style="font-size:.82rem;color:var(--miss)">Falta postar: <strong>${qF.map(p=>p.nome).join(', ')}</strong></span></div>`;
   st+=`</div>`;
-  st+=`<div class="ss"><h3>👀 Views totais acumuladas</h3><div class="card" style="margin-bottom:12px">${ranking.map(p=>`<div class="cbar"><div class="cb-n" style="color:${pc(p)}">${p.nome}</div><div class="cb-w"><div class="cb-b" style="width:${(p.totalViews/maxV*100).toFixed(1)}%;background:${pc(p)}"></div></div><div class="cb-v">${fmt(p.totalViews)}<span class="cb-u"> views</span></div></div>`).join('')}</div></div>`;
-  const maxE=Math.max(...ranking.map(p=>p.totalCurtidas+p.totalComentarios+p.totalSalvos+p.totalCompart),1);
-  st+=`<div class="ss"><h3>💬 Engajamento total</h3><div class="card" style="margin-bottom:12px">${ranking.map(p=>{const e=p.totalCurtidas+p.totalComentarios+p.totalSalvos+p.totalCompart;return`<div class="cbar"><div class="cb-n" style="color:${pc(p)}">${p.nome}</div><div class="cb-w"><div class="cb-b" style="width:${(e/maxE*100).toFixed(1)}%;background:${pc(p)}"></div></div><div class="cb-v">${fmt(e)}<span class="cb-u"> interações</span></div></div>`;}).join('')}</div></div>`;
-  st+=`<div class="ss"><h3>📈 Médias por vídeo</h3>${ranking.map(p=>{const n=Math.max(p.diasPostou,1);return`<div class="card" style="border-color:${pc(p)}30;margin-bottom:8px"><div class="card-stripe" style="background:linear-gradient(90deg,${pc(p)},transparent)"></div><div style="font-weight:700;font-size:.85rem;margin-bottom:8px;color:${pc(p)}">${p.nome}</div><div class="stats-grid" style="grid-template-columns:repeat(4,1fr)"><div class="stat"><div class="stat-v" style="font-size:1rem">${fmt(Math.round(p.totalViews/n))}</div><div class="stat-l">Views</div></div><div class="stat"><div class="stat-v" style="font-size:1rem">${fmt(Math.round(p.totalCurtidas/n))}</div><div class="stat-l">Curtidas</div></div><div class="stat"><div class="stat-v" style="font-size:1rem">${fmt(Math.round(p.totalSalvos/n))}</div><div class="stat-l">Salvos</div></div><div class="stat"><div class="stat-v" style="font-size:1rem">${fmt(Math.round(p.totalCompart/n))}</div><div class="stat-l">Compart.</div></div></div></div>`;}).join('')}</div>`;
+
+  // Posts por tipo
+  st+=`<div class="ss"><h3>📸 Posts por tipo</h3><div class="card" style="margin-bottom:12px"><div class="stats-grid" style="grid-template-columns:repeat(3,1fr)"><div class="stat"><div class="stat-v" style="font-size:1.3rem">📸 ${totalPosts}</div><div class="stat-l">Posts</div></div><div class="stat"><div class="stat-v" style="font-size:1.3rem">🎬 ${totalReels}</div><div class="stat-l">Reels</div></div><div class="stat"><div class="stat-v" style="font-size:1.3rem">📱 ${totalStories}</div><div class="stat-l">Stories</div></div></div></div>`;
+  // per participant
+  ranking.forEach(p=>{
+    const pp=p.posts||[];const nR=pp.filter(x=>x.tipo==='reels').length;const nS=pp.filter(x=>x.tipo==='story').length;const nP=pp.length-nR-nS;
+    const maxT=Math.max(nP,nR,nS,1);
+    st+=`<div class="card" style="border-color:${pc(p)}30;margin-bottom:8px;padding:12px 16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="font-weight:700;font-size:.85rem;color:${pc(p)}">${p.nome}</span><span style="font-size:.7rem;color:var(--t3)">${pp.length} posts</span></div>`;
+    st+=`<div class="cbar"><div class="cb-n">📸 Post</div><div class="cb-w"><div class="cb-b" style="width:${(nP/maxT*100).toFixed(0)}%;background:${pc(p)}"></div></div><div class="cb-v">${nP}</div></div>`;
+    st+=`<div class="cbar"><div class="cb-n">🎬 Reels</div><div class="cb-w"><div class="cb-b" style="width:${(nR/maxT*100).toFixed(0)}%;background:${pc(p)}88"></div></div><div class="cb-v">${nR}</div></div>`;
+    st+=`<div class="cbar"><div class="cb-n">📱 Story</div><div class="cb-w"><div class="cb-b" style="width:${(nS/maxT*100).toFixed(0)}%;background:${pc(p)}55"></div></div><div class="cb-v">${nS}</div></div></div>`;
+  });
+  st+=`</div>`;
+
+  // Métricas (só aparece se tiver dados)
+  if(hasMetrics){
+    const maxV=Math.max(...ranking.map(p=>p.totalViews),1);
+    st+=`<div class="ss"><h3>👀 Views totais acumuladas</h3><div class="card" style="margin-bottom:12px">${ranking.map(p=>`<div class="cbar"><div class="cb-n" style="color:${pc(p)}">${p.nome}</div><div class="cb-w"><div class="cb-b" style="width:${(p.totalViews/maxV*100).toFixed(1)}%;background:${pc(p)}"></div></div><div class="cb-v">${fmt(p.totalViews)}<span class="cb-u"> views</span></div></div>`).join('')}</div></div>`;
+    const maxE=Math.max(...ranking.map(p=>p.totalCurtidas+p.totalComentarios+p.totalSalvos+p.totalCompart),1);
+    st+=`<div class="ss"><h3>💬 Engajamento total</h3><div class="card" style="margin-bottom:12px">${ranking.map(p=>{const e=p.totalCurtidas+p.totalComentarios+p.totalSalvos+p.totalCompart;return`<div class="cbar"><div class="cb-n" style="color:${pc(p)}">${p.nome}</div><div class="cb-w"><div class="cb-b" style="width:${(e/maxE*100).toFixed(1)}%;background:${pc(p)}"></div></div><div class="cb-v">${fmt(e)}<span class="cb-u"> interações</span></div></div>`;}).join('')}</div></div>`;
+  }
+
+  // Últimos posts
+  const allPosts=ranking.flatMap(p=>(p.posts||[]).map(x=>({...x,nome:p.nome,corHex:pc(p)}))).sort((a,b)=>b.dia.localeCompare(a.dia));
+  st+=`<div class="ss"><h3>🕐 Últimos posts</h3>`;
+  if(allPosts.length){
+    allPosts.slice(0,10).forEach(p=>{
+      const icon=p.tipo==='story'?'📱':p.tipo==='reels'?'🎬':'📸';
+      const dParts=p.dia.split('-');const dFmt=dParts[2]+'/'+dParts[1];
+      const metLine=[];
+      if(p.views)metLine.push(`${fmt(p.views)} views`);
+      if(p.curtidas)metLine.push(`${fmt(p.curtidas)}❤️`);
+      if(p.comentarios)metLine.push(`${p.comentarios}💬`);
+      if(p.salvos)metLine.push(`${p.salvos}🔖`);
+      if(p.compart)metLine.push(`${p.compart}↗️`);
+      st+=`<div class="card" style="margin-bottom:6px;padding:10px 14px"><div style="display:flex;align-items:center;gap:8px"><span>${icon}</span><span style="font-weight:700;font-size:.82rem;color:${p.corHex}">${p.nome}</span><span style="font-size:.7rem;color:var(--t3);margin-left:auto">${dFmt}</span></div>`;
+      if(metLine.length) st+=`<div style="font-size:.75rem;color:var(--t2);margin-top:4px">${metLine.join(' · ')}</div>`;
+      if(p.link) st+=`<a href="${p.link}" target="_blank" style="font-size:.72rem;color:var(--accent);text-decoration:none;display:block;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.link}</a>`;
+      st+=`</div>`;
+    });
+  } else {
+    st+=`<div style="text-align:center;padding:20px;color:var(--t3);font-size:.85rem">Nenhum post registrado ainda</div>`;
+  }
+  st+=`</div>`;
+
+  // Consistência (posts por participante)
+  const maxPosts=Math.max(...ranking.map(p=>(p.posts||[]).length),1);
+  st+=`<div class="ss"><h3>🏆 Total de posts por participante</h3><div class="card" style="margin-bottom:12px">${ranking.map(p=>{const n=(p.posts||[]).length;return`<div class="cbar"><div class="cb-n" style="color:${pc(p)}">${p.nome}</div><div class="cb-w"><div class="cb-b" style="width:${(n/maxPosts*100).toFixed(1)}%;background:${pc(p)}"></div></div><div class="cb-v">${n}<span class="cb-u"> posts</span></div></div>`;}).join('')}</div></div>`;
+
   document.getElementById('panel-stats').innerHTML=st;
 
   // ── SEMANA ──

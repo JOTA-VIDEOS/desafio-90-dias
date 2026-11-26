@@ -1,4 +1,4 @@
-const CACHE = 'desafio90-v14';
+const CACHE = 'desafio90-v15';
 const ASSETS = ['./', 'index.html', 'manifest.json', 'icon-192.svg', 'icon-512.svg'];
 
 self.addEventListener('install', e => {

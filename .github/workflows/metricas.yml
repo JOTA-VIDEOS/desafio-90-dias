@@ -1,0 +1,36 @@
+name: Atualizar métricas de hora em hora
+
+on:
+  schedule:
+    - cron: "15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  atualizar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Chamar RPC para cada checkin com link
+        env:
+          SB_URL: https://hvvrrzginawubhygdudg.supabase.co
+          SB_KEY: sb_publishable_04nBljXEMFqN-Cza2S4-yw_uCgHX8-n
+        run: |
+          set -e
+          curl -s "$SB_URL/rest/v1/checkins?select=id,link&link=not.is.null&link=neq.&link=like.*instagram.com*" \
+            -H "apikey: $SB_KEY" -H "Authorization: Bearer $SB_KEY" -o /tmp/ck.json
+          echo "Total: $(jq length /tmp/ck.json)"
+          jq -c '.[]' /tmp/ck.json | while read row; do
+            id=$(echo "$row" | jq -r '.id')
+            link=$(echo "$row" | jq -r '.link')
+            met=$(curl -s -X POST "$SB_URL/rest/v1/rpc/fetch_ig_metrics" \
+              -H "apikey: $SB_KEY" -H "Authorization: Bearer $SB_KEY" \
+              -H "Content-Type: application/json" \
+              -d "{\"ig_url\":\"$link\"}")
+            if echo "$met" | jq -e 'type=="object" and (has("curtidas") or has("comentarios") or has("views"))' > /dev/null; then
+              curl -s -X PATCH "$SB_URL/rest/v1/checkins?id=eq.$id" \
+                -H "apikey: $SB_KEY" -H "Authorization: Bearer $SB_KEY" \
+                -H "Content-Type: application/json" \
+                -H "Prefer: return=minimal" \
+                -d "$met" > /dev/null
+            fi
+            sleep 1
+          done
